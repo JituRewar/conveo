@@ -1,13 +1,180 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
+datasource db {
+  provider = "postgresql"
+}
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
-datasource db {
-  provider = "postgresql"
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+}
+
+enum WaitlistStatus {
+  WAITING
+  PROMOTED
+  EXPIRED
+}
+
+model User {
+  id              String             @id // Synced with Clerk ID (user_...)
+  email           String             @unique
+  firstName       String?
+  lastName        String?
+  imageUrl        String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  memberships     UserOrganization[]
+  registrations   Registration[]
+  waitlistEntries WaitlistEntry[]
+  auditLogs       AuditLog[]
+}
+
+model Organization {
+  id        String             @id // Synced with Clerk Organization ID (org_...)
+  name      String
+  slug      String             @unique
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  members   UserOrganization[]
+  events    Event[]
+  auditLogs AuditLog[]
+}
+
+model UserOrganization {
+  id             String   @id @default(uuid())
+  userId         String
+  organizationId String
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+model Event {
+  id             String      @id @default(uuid())
+  organizationId String
+  title          String
+  slug           String
+  description    String?
+  imageUrl       String?
+  location       String? // Venue details or meeting link
+  isVirtual      Boolean     @default(false)
+  startDate      DateTime
+  endDate        DateTime
+  status         EventStatus @default(DRAFT)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticketTypes     TicketType[]
+  registrations   Registration[]
+  waitlistEntries WaitlistEntry[]
+
+  @@unique([organizationId, slug])
+}
+
+model TicketType {
+  id          String         @id @default(uuid())
+  eventId     String
+  name        String
+  description String?
+  price       Int            // In cents (e.g. 2500 for $25.00, 0 for Free)
+  capacity    Int?           // Null represents unlimited capacity
+  sold        Int            @default(0)
+  salesStart  DateTime?
+  salesEnd    DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tickets       Ticket[]
+  registrations Registration[]
+}
+
+model Registration {
+  id                String      @id @default(uuid())
+  eventId           String
+  userId            String?
+  ticketTypeId      String
+  email             String
+  name              String
+  status            OrderStatus @default(PENDING)
+  totalAmount       Int         // In cents
+  razorpayOrderId   String?     @unique // Reference for Razorpay order ID
+  razorpayPaymentId String?     @unique // Reference for Razorpay payment receipt
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id])
+  tickets    Ticket[]
+}
+
+model Ticket {
+  id             String    @id @default(uuid())
+  registrationId String
+  ticketTypeId   String
+  ticketCode     String    @unique // Unique hash for check-in QR codes
+  checkedIn      Boolean   @default(false)
+  checkedInAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  ticketType   TicketType   @relation(fields: [ticketTypeId], references: [id])
+}
+
+model WaitlistEntry {
+  id        String         @id @default(uuid())
+  eventId   String
+  userId    String
+  email     String
+  name      String
+  status    WaitlistStatus @default(WAITING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  userId         String?
+  organizationId String?
+  action         String   // e.g. "EVENT_CREATE", "TICKET_PURCHASE", "ROLE_CHANGE"
+  details        String?  // JSON string for metadata
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 }

@@ -7,5 +7,20 @@ export function ThemeProvider({
   children,
   ...props
 }: React.ComponentProps<typeof NextThemesProvider>) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('theme')
+      if (saved && saved.includes(' ')) {
+        localStorage.removeItem('theme')
+      }
+    } catch {
+      // ignore SSR/storage error
+    }
+  }, [])
+
+  return (
+    <NextThemesProvider {...props} value={{ light: 'light', dark: 'dark' }}>
+      {children}
+    </NextThemesProvider>
+  )
 }

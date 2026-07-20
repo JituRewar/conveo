@@ -6,3 +6,5 @@ build
 package-lock.json
 public
 prisma/schema.prisma
+src/generated/
+
