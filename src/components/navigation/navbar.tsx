@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { Search, Command, Layers, Bell, Menu } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { Search, Command, Bell, Menu } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { ConveoLogo } from '@/components/ui/animated-svgs'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +23,13 @@ export function Navbar({
   className,
   ...props
 }: NavbarProps) {
+  const pathname = usePathname()
+
+  // Do not render global marketing navbar inside dashboard routes (dashboard has its own TopNavigation shell)
+  if (pathname?.startsWith('/dashboard')) {
+    return null
+  }
+
   return (
     <header
       className={cn(

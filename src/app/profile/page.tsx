@@ -1,7 +1,7 @@
 import { UserProfile } from '@clerk/nextjs'
 import { getCurrentUserSession } from '@/features/auth/services/auth.service'
 import { Badge } from '@/components/ui/badge'
-import { ShieldCheck, User as UserIcon, Calendar, Key } from 'lucide-react'
+import { ShieldCheck, User as UserIcon, Key } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
 export default async function UserProfilePage() {

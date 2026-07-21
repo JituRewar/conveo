@@ -91,7 +91,6 @@ import { ErrorState } from '@/components/ui/error-state'
 export default function DesignSystemPage() {
   const [cmdOpen, setCmdOpen] = React.useState(false)
   const [sidebarOpen] = React.useState(true)
-  const [activeNav, setActiveNav] = React.useState('dashboard')
   const [switchChecked, setSwitchChecked] = React.useState(true)
   const [checkboxChecked, setCheckboxChecked] = React.useState(true)
   const [radioVal, setRadioVal] = React.useState('fast')
@@ -105,7 +104,7 @@ export default function DesignSystemPage() {
       <div className="relative flex flex-1">
         {/* Sidebar */}
         <div className={sidebarOpen ? 'block' : 'hidden lg:block'}>
-          <Sidebar activeId={activeNav} onSelect={setActiveNav} />
+          <Sidebar />
         </div>
 
         {/* Main Canvas Area */}

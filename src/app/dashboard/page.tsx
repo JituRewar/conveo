@@ -4,13 +4,10 @@ import Link from 'next/link'
 import {
   Shield,
   User,
-  Key,
   CheckCircle2,
   Lock,
   Layers,
   Sparkles,
-  ArrowUpRight,
-  LogOut,
 } from 'lucide-react'
 import { getCurrentUserSession } from '@/features/auth/services/auth.service'
 import { Badge } from '@/components/ui/badge'

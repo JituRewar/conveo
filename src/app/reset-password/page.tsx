@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, Suspense } from 'react'
 import { useAuth, useClerk } from '@clerk/nextjs'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -13,7 +13,7 @@ import { AnimatedKeyLock } from '@/components/ui/animated-svgs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const { isLoaded } = useAuth()
   const { client, setActive } = useClerk()
   const searchParams = useSearchParams()
@@ -169,5 +169,19 @@ export default function ResetPasswordPage() {
         </Link>
       </div>
     </AuthCardContainer>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="text-primary h-8 w-8 animate-spin" />
+        </div>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
   )
 }

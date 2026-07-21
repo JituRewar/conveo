@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 datasource db {
   provider = "postgresql"
 }
@@ -10,61 +7,128 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+// ==========================================
+// ENUMS
+// ==========================================
+
 enum Role {
   OWNER
   ADMIN
-  MEMBER
+  ORGANIZER
+  VOLUNTEER
+  VIEWER
 }
 
 enum EventStatus {
   DRAFT
   PUBLISHED
-  CANCELLED
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  COMPLETED
+  ARCHIVED
 }
 
-enum OrderStatus {
+enum TicketStatus {
+  CREATED
+  ISSUED
+  CHECKED_IN
+  EXPIRED
+}
+
+enum RegistrationStatus {
   PENDING
   CONFIRMED
   CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
   REFUNDED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum NotificationType {
+  EMAIL
+  IN_APP
 }
 
 enum WaitlistStatus {
   WAITING
   PROMOTED
   EXPIRED
+  CANCELLED
 }
+
+// ==========================================
+// AUTHENTICATION & USER MODULE
+// ==========================================
 
 model User {
-  id              String             @id // Synced with Clerk ID (user_...)
-  email           String             @unique
-  firstName       String?
-  lastName        String?
-  imageUrl        String?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  memberships     UserOrganization[]
-  registrations   Registration[]
-  waitlistEntries WaitlistEntry[]
-  auditLogs       AuditLog[]
+  id          String    @id @default(cuid())
+  email       String    @unique
+  firstName   String?
+  lastName    String?
+  imageUrl    String?
+  bio         String?
+  phoneNumber String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  memberships       Membership[]
+  invitationsSent   Invitation[]     @relation("InvitedBy")
+  registrations     Registration[]
+  tickets           Ticket[]         @relation("TicketOwner")
+  ticketsCheckedIn Ticket[]         @relation("CheckedInBy")
+  payments          Payment[]
+  waitlistEntries   WaitlistEntry[]
+  reviews           Review[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  mediaAssets       EventMedia[]     @relation("UploadedMedia")
+
+  @@index([email])
+  @@index([createdAt])
 }
+
+// ==========================================
+// ORGANIZATION & MEMBERSHIP MODULE
+// ==========================================
 
 model Organization {
-  id        String             @id // Synced with Clerk Organization ID (org_...)
-  name      String
-  slug      String             @unique
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  members   UserOrganization[]
-  events    Event[]
-  auditLogs AuditLog[]
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  logoUrl     String?
+  website     String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members     Membership[]
+  invitations Invitation[]
+  events      Event[]
+  mediaAssets EventMedia[]
+  auditLogs   AuditLog[]
+
+  @@index([slug])
+  @@index([createdAt])
 }
 
-model UserOrganization {
-  id             String   @id @default(uuid())
+model Membership {
+  id             String   @id @default(cuid())
   userId         String
   organizationId String
-  role           Role     @default(MEMBER)
+  role           Role     @default(VOLUNTEER)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -72,109 +136,361 @@ model UserOrganization {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([role])
+}
+
+model Invitation {
+  id             String           @id @default(cuid())
+  email          String
+  organizationId String
+  inviterId      String
+  role           Role             @default(VOLUNTEER)
+  status         InvitationStatus @default(PENDING)
+  token          String           @unique
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviter      User         @relation("InvitedBy", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([token])
+  @@index([status])
+}
+
+// ==========================================
+// EVENT MANAGEMENT MODULE
+// ==========================================
+
+model EventCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events Event[]
+}
+
+model Venue {
+  id         String   @id @default(cuid())
+  name       String
+  address    String
+  city       String
+  state      String?
+  country    String
+  postalCode String?
+  latitude   Float?
+  longitude  Float?
+  capacity   Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  events Event[]
+
+  @@index([city, country])
 }
 
 model Event {
-  id             String      @id @default(uuid())
-  organizationId String
-  title          String
-  slug           String
-  description    String?
-  imageUrl       String?
-  location       String? // Venue details or meeting link
-  isVirtual      Boolean     @default(false)
-  startDate      DateTime
-  endDate        DateTime
-  status         EventStatus @default(DRAFT)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  organizationId     String
+  categoryId         String?
+  venueId            String?
+  title              String
+  slug               String      @unique
+  description        String?
+  shortDescription   String?
+  coverImage         String?
+  isVirtual          Boolean     @default(false)
+  virtualMeetingUrl String?
+  startDate          DateTime
+  endDate            DateTime
+  status             EventStatus @default(DRAFT)
+  capacity           Int?
+  deletedAt          DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  category        EventCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  venue           Venue?             @relation(fields: [venueId], references: [id], onDelete: SetNull)
   ticketTypes     TicketType[]
   registrations   Registration[]
   waitlistEntries WaitlistEntry[]
+  reviews         Review[]
+  mediaAssets     EventMedia[]
+  tags            EventTagOnEvent[]
 
   @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([categoryId])
+  @@index([venueId])
+  @@index([status])
+  @@index([startDate])
+  @@index([createdAt])
 }
 
+model EventTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events EventTagOnEvent[]
+}
+
+model EventTagOnEvent {
+  eventId   String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  event Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tag   EventTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, tagId])
+  @@index([eventId])
+  @@index([tagId])
+}
+
+model EventMedia {
+  id             String   @id @default(cuid())
+  organizationId String?
+  eventId        String?
+  uploaderId     String?
+  url            String
+  fileName       String?
+  fileType       String?
+  fileSize       Int?
+  altText        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  event        Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  uploader     User?         @relation("UploadedMedia", fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([eventId])
+  @@index([uploaderId])
+}
+
+// ==========================================
+// TICKETING & REGISTRATION MODULE
+// ==========================================
+
 model TicketType {
-  id          String         @id @default(uuid())
+  id          String    @id @default(cuid())
   eventId     String
   name        String
   description String?
-  price       Int            // In cents (e.g. 2500 for $25.00, 0 for Free)
-  capacity    Int?           // Null represents unlimited capacity
-  sold        Int            @default(0)
+  price       Int       @default(0)
+  currency    String    @default("USD")
+  capacity    Int?
+  sold        Int       @default(0)
+  minQuantity Int       @default(1)
+  maxQuantity Int       @default(10)
   salesStart  DateTime?
   salesEnd    DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  tickets       Ticket[]
-  registrations Registration[]
+  event           Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrations   Registration[]
+  tickets         Ticket[]
+  waitlistEntries WaitlistEntry[]
+
+  @@index([eventId])
 }
 
 model Registration {
-  id                String      @id @default(uuid())
-  eventId           String
-  userId            String?
-  ticketTypeId      String
-  email             String
-  name              String
-  status            OrderStatus @default(PENDING)
-  totalAmount       Int         // In cents
-  razorpayOrderId   String?     @unique // Reference for Razorpay order ID
-  razorpayPaymentId String?     @unique // Reference for Razorpay payment receipt
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id               String             @id @default(cuid())
+  eventId          String
+  userId           String
+  ticketTypeId     String
+  registrationCode String             @unique
+  attendeeName     String
+  attendeeEmail    String
+  quantity         Int                @default(1)
+  totalAmount      Int                @default(0)
+  status           RegistrationStatus @default(PENDING)
+  cancelledAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
-  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
-  ticketType TicketType @relation(fields: [ticketTypeId], references: [id])
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
   tickets    Ticket[]
+  payments   Payment[]
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@index([ticketTypeId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Ticket {
-  id             String    @id @default(uuid())
-  registrationId String
-  ticketTypeId   String
-  ticketCode     String    @unique // Unique hash for check-in QR codes
-  checkedIn      Boolean   @default(false)
-  checkedInAt    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                String       @id @default(cuid())
+  registrationId    String
+  ticketTypeId      String
+  userId            String?
+  ticketCode        String       @unique
+  status            TicketStatus @default(CREATED)
+  checkedInAt       DateTime?
+  checkedInByUserId String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  ticketType   TicketType   @relation(fields: [ticketTypeId], references: [id])
+  ticketType   TicketType   @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  user         User?        @relation("TicketOwner", fields: [userId], references: [id], onDelete: SetNull)
+  checkedInBy  User?        @relation("CheckedInBy", fields: [checkedInByUserId], references: [id], onDelete: SetNull)
+  reviews      Review[]
+
+  @@index([registrationId])
+  @@index([ticketTypeId])
+  @@index([userId])
+  @@index([ticketCode])
+  @@index([status])
 }
 
-model WaitlistEntry {
-  id        String         @id @default(uuid())
-  eventId   String
-  userId    String
-  email     String
-  name      String
-  status    WaitlistStatus @default(WAITING)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+// ==========================================
+// PAYMENT MODULE
+// ==========================================
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Payment {
+  id                String        @id @default(cuid())
+  registrationId    String
+  userId            String
+  amount            Int
+  currency          String        @default("USD")
+  status            PaymentStatus @default(PENDING)
+  provider          String        @default("RAZORPAY")
+  razorpayOrderId   String?       @unique
+  razorpayPaymentId String?       @unique
+  razorpaySignature String?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  refunds      Refund[]
+
+  @@index([registrationId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Refund {
+  id               String        @id @default(cuid())
+  paymentId        String
+  amount           Int
+  reason           String?
+  status           PaymentStatus @default(PENDING)
+  razorpayRefundId String?       @unique
+  processedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId])
+  @@index([status])
+}
+
+// ==========================================
+// ENGAGEMENT & OPERATIONS MODULE
+// ==========================================
+
+model WaitlistEntry {
+  id           String         @id @default(cuid())
+  eventId      String
+  userId       String
+  ticketTypeId String?
+  status       WaitlistStatus @default(WAITING)
+  priority     Int            @default(0)
+  promotedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: SetNull)
 
   @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  ticketId  String?  @unique
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@index([rating])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+  @@index([createdAt])
 }
 
 model AuditLog {
-  id             String   @id @default(uuid())
+  id             String   @id @default(cuid())
   userId         String?
   organizationId String?
-  action         String   // e.g. "EVENT_CREATE", "TICKET_PURCHASE", "ROLE_CHANGE"
-  details        String?  // JSON string for metadata
+  action         String
+  entityType     String?
+  entityId       String?
+  details        Json?
   ipAddress      String?
   userAgent      String?
   createdAt      DateTime @default(now())
 
   user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([createdAt])
 }

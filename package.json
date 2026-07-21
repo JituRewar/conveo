@@ -8,7 +8,14 @@
     "start": "next start",
     "lint": "eslint",
     "email": "email dev",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

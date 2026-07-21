@@ -121,7 +121,8 @@ export async function POST(req: Request) {
       return new Response('Missing membership attributes', { status: 400 })
     }
 
-    let dbRole: 'OWNER' | 'ADMIN' | 'MEMBER' = 'MEMBER'
+    let dbRole: 'OWNER' | 'ADMIN' | 'ORGANIZER' | 'VOLUNTEER' | 'VIEWER' =
+      'ORGANIZER'
     if (role === 'org:admin') {
       dbRole = 'ADMIN'
     } else if (role === 'org:owner') {
@@ -132,7 +133,7 @@ export async function POST(req: Request) {
     const orgExists = await db.organization.findUnique({ where: { id: orgId } })
 
     if (userExists && orgExists) {
-      await db.userOrganization.upsert({
+      await db.membership.upsert({
         where: {
           userId_organizationId: {
             userId,
@@ -155,7 +156,7 @@ export async function POST(req: Request) {
     const userId = public_user_data.user_id
 
     if (orgId && userId) {
-      await db.userOrganization.deleteMany({
+      await db.membership.deleteMany({
         where: {
           userId,
           organizationId: orgId,
